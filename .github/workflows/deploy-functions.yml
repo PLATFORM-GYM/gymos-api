@@ -28,15 +28,14 @@ jobs:
 
       - name: Write .env for functions
         run: |
-          cat <<'EOF' > functions/.env
-          DATABASE=${{ secrets.DATABASE }}
-          JWT_SECRET=${{ secrets.JWT_SECRET }}
-          JWT_AUTH_TOKEN_SECRET=${{ secrets.JWT_AUTH_TOKEN_SECRET }}
-          WOMPI_PUBLIC_KEY=${{ secrets.WOMPI_PUBLIC_KEY }}
-          WOMPI_PRIVATE_KEY=${{ secrets.WOMPI_PRIVATE_KEY }}
-          FRONTEND_URL=${{ secrets.FRONTEND_URL }}
-          NODE_ENV=production
-          EOF
+          echo "NODE_ENV=production" > functions/.env
+          echo "DATABASE=${{ secrets.DATABASE }}" >> functions/.env
+          echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> functions/.env
+          echo "WOMPI_PUB_KEY=${{ secrets.WOMPI_PUB_KEY }}" >> functions/.env
+          echo "WOMPI_PRV_KEY=${{ secrets.WOMPI_PRV_KEY }}" >> functions/.env
+          echo "WOMPI_EVENTS_SECRET=${{ secrets.WOMPI_EVENTS_SECRET }}" >> functions/.env
+          echo "WOMPI_INTEGRITY_KEY=${{ secrets.WOMPI_INTEGRITY_KEY }}" >> functions/.env
+          echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> functions/.env
 
       - name: Deploy to Firebase Functions
-        run: firebase deploy --only functions --project gyms-4b30f --token "${{ secrets.FIREBASE_TOKEN }}"
+        run: firebase deploy --only functions --project gyms-4b30f --force --token "${{ secrets.FIREBASE_TOKEN }}"

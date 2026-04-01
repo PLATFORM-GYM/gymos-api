@@ -24,8 +24,7 @@ const paginatedList = async (Model, req, res) => {
     // Initialize query conditions
     const queryConditions = { removed: false };
 
-    // Add gymId to query conditions if provided
-    if (gymId) {
+    if (gymId && gymId !== 'undefined' && /^[a-f\d]{24}$/i.test(gymId)) {
       queryConditions.gym = new ObjectId(gymId);
     }
 

@@ -1,10 +1,9 @@
 const { migrate } = require('./migrate');
 
-const listAll = async (Model, req, res, next) => {
+const listAll = async (Model, req, res) => {
   try {
-    const userId = req.admin._id; // Get the current user’s ID
+    const userId = req.admin._id;
 
-    // Query gyms where the user is a coach, client, or administrator
     const result = await Model.find({
       removed: false,
       $or: [
@@ -14,10 +13,9 @@ const listAll = async (Model, req, res, next) => {
       ]
     })
       .sort({ created: parseInt(req.query.sort) || 'desc' })
-      .populate() // Autopopulate related fields if needed
+      .populate()
       .exec();
 
-    // Apply migration or transformation if necessary
     const migratedData = result.map((x) => migrate(x));
 
     return res.status(200).json({
@@ -26,7 +24,12 @@ const listAll = async (Model, req, res, next) => {
       message: 'Successfully found all gyms for the current user',
     });
   } catch (error) {
-    next(error);
+    console.error('[gym.listAll] error:', error.message);
+    return res.status(500).json({
+      success: false,
+      result: null,
+      message: error.message,
+    });
   }
 };
 

@@ -1,26 +1,22 @@
 const listAll = async (Model, req, res) => {
   const sort = req.query.sort || 'desc';
   const enabled = req.query.enabled || undefined;
+  const gymId = req.query.gymId;
 
-  //  Query the database for a list of all results
+  const query = { removed: false };
 
-  let result;
-  if (enabled === undefined) {
-    result = await Model.find({
-      removed: false,
-    })
-      .sort({ created: sort })
-      .populate()
-      .exec();
-  } else {
-    result = await Model.find({
-      removed: false,
-      enabled: enabled,
-    })
-      .sort({ created: sort })
-      .populate()
-      .exec();
+  if (enabled !== undefined) {
+    query.enabled = enabled;
   }
+
+  if (gymId && gymId !== 'undefined') {
+    query.gym = gymId;
+  }
+
+  const result = await Model.find(query)
+    .sort({ created: sort })
+    .populate()
+    .exec();
 
   if (result.length > 0) {
     return res.status(200).json({

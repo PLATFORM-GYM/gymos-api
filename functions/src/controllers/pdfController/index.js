@@ -1,7 +1,8 @@
 const pug = require('pug');
 const fs = require('fs');
 const moment = require('moment');
-let pdf = require('html-pdf');
+let pdf;
+try { pdf = require('html-pdf'); } catch (_) { pdf = { create: () => ({ toBuffer: (cb) => cb(new Error('PDF not available in Cloud Functions')) }) }; }
 const { listAllSettings, loadSettings } = require('@/middlewares/settings');
 const { getData } = require('@/middlewares/serverData');
 const useLanguage = require('@/locale/useLanguage');

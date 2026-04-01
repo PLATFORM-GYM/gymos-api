@@ -1,57 +1,61 @@
-/**
- * GymOS API — Firebase Cloud Functions entry point
- * Express app wrapped as a single HTTPS function.
- * CORS is handled at the wrapper level to ensure it works
- * even if Express initialization fails.
- */
+'use strict';
 const path = require('path');
 
-// Resolve @ alias to functions/src before any other imports
 require('module-alias').addAlias('@', path.join(__dirname, 'src'));
-
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
+// ── 1. Initialize Firebase Admin (for auth token verification) ──
+const admin = require('firebase-admin');
+if (!admin.apps.length) {
+  admin.initializeApp();
+  console.log('[init] Firebase Admin initialized, project:', admin.app().options.projectId || 'auto');
+}
+
+// ── 2. Connect Mongoose ──
 const mongoose = require('mongoose');
 const { globSync } = require('glob');
-const functions = require('firebase-functions');
+const DATABASE = process.env.DATABASE;
 
-// Connect to MongoDB Atlas once (reused across warm invocations)
-if (mongoose.connection.readyState === 0) {
-  mongoose
-    .connect(process.env.DATABASE, { serverSelectionTimeoutMS: 8000 })
-    .then(() => console.log('MongoDB connected'))
-    .catch((err) => console.error('MongoDB connection error:', err.message));
+let dbReady = false;
+if (DATABASE) {
+  mongoose.connect(DATABASE).then(() => {
+    dbReady = true;
+    console.log('[init] MongoDB/Firestore connected');
+  }).catch((err) => {
+    console.error('[init] DB connection failed:', err.message);
+  });
+} else {
+  console.error('[init] DATABASE env var not set!');
 }
 
-mongoose.connection.on('error', (err) =>
-  console.error('Mongoose error:', err.message)
-);
+// ── 3. Load all Mongoose model schemas before the app ──
+const modelFiles = globSync(path.join(__dirname, 'src/models/**/*.js'));
+modelFiles.forEach((f) => require(f));
 
-// Auto-load all Mongoose models
-const modelsFiles = globSync('./src/models/**/*.js', { cwd: __dirname });
-for (const filePath of modelsFiles) {
-  require(path.resolve(__dirname, filePath));
-}
-
+// ── 4. Load Express app ──
 const app = require('./src/app');
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Accept',
-  'Access-Control-Max-Age': '86400',
-};
+const functions = require('firebase-functions');
+const CORS_ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
+const CORS_ALLOW_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept, Cookie';
 
-exports.api = functions
-  .runWith({ timeoutSeconds: 60, memory: '512MB' })
-  .https.onRequest((req, res) => {
-    // Set CORS headers on every response (including errors)
-    Object.entries(CORS_HEADERS).forEach(([key, value]) => res.set(key, value));
+exports.api = functions.runWith({ timeoutSeconds: 60, memory: '512MB' }).https.onRequest(async (req, res) => {
+  const origin = req.headers['origin'] || '*';
+  res.set('Access-Control-Allow-Origin', origin);
+  res.set('Access-Control-Allow-Methods', CORS_ALLOW_METHODS);
+  res.set('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS);
+  res.set('Access-Control-Allow-Credentials', 'true');
+  res.set('Access-Control-Max-Age', '86400');
+  res.set('Vary', 'Origin');
+  if (req.method === 'OPTIONS') return res.status(204).send('');
 
-    // Handle preflight OPTIONS immediately without hitting Express
-    if (req.method === 'OPTIONS') {
-      return res.status(204).send('');
-    }
+  if (!dbReady && DATABASE) {
+    try { await mongoose.connect(DATABASE); dbReady = true; } catch (_) {}
+  }
 
-    return app(req, res);
-  });
+  if (!req.url.startsWith('/api')) {
+    req.url = '/api' + req.url;
+  }
+
+  return app(req, res);
+});

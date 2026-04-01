@@ -2,7 +2,7 @@ const { migrate } = require('./migrate');
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.Types;
 
-const search = async (Model, req, res, next) => {
+const search = async (Model, req, res) => {
   try {
     const { gymId, type, category } = req.query;
 
@@ -42,7 +42,7 @@ const search = async (Model, req, res, next) => {
       message: 'Successfully found memberships for the specified gym',
     });
   } catch (error) {
-    return next(error);
+    return res.status(500).json({ success: false, result: null, message: error.message });
   }
 };
 

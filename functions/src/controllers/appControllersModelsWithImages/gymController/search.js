@@ -1,6 +1,6 @@
 const { migrate } = require('./migrate');
 
-const search = async (Model, req, res, next) => {
+const search = async (Model, req, res) => {
   try {
     const query = req.query.q || '';
     if (!query.trim()) {
@@ -51,7 +51,7 @@ const search = async (Model, req, res, next) => {
       });
     }
   } catch (error) {
-    next(error);
+    return res.status(500).json({ success: false, result: null, message: error.message });
   }
 };
 

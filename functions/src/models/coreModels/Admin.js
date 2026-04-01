@@ -10,6 +10,12 @@ const adminSchema = new Schema({
     type: Boolean,
     default: true,
   },
+  uid: {
+    type: String,
+    trim: true,
+    sparse: true,
+    index: true,
+  },
   email: {
     type: String,
     lowercase: true,

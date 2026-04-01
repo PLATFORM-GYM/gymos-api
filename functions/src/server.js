@@ -1,39 +1,31 @@
 require('module-alias/register');
-const mongoose = require('mongoose');
-const { globSync } = require('glob');
-const path = require('path');
 
-// Make sure we are running node 7.6+
-const [major, minor] = process.versions.node.split('.').map(parseFloat);
+const [major] = process.versions.node.split('.').map(parseFloat);
 if (major < 20) {
-  console.log('Please upgrade your node.js version at least 20 or greater. 👌\n ');
+  console.log('Please upgrade node.js to v20 or greater.');
   process.exit();
 }
 
-// import environmental variables from our variables.env file
 require('dotenv').config({ path: '.env' });
-require('dotenv').config({ path: '.env.local' });
+require('dotenv').config({ path: '.env.local', override: true });
 
-mongoose.connect(process.env.DATABASE);
+const mongoose = require('mongoose');
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// Initialize Firebase Admin for auth token verification
+const { getAdmin } = require('./db/firestore');
+getAdmin();
 
-mongoose.connection.on('error', (error) => {
-  console.log(
-    `1. 🔥 Common Error caused issue → : check your .env file first and add your mongodb url`
-  );
-  console.error(`2. 🚫 Error → : ${error.message}`);
-});
+const DATABASE = process.env.DATABASE || 'mongodb://localhost:27017/gymos';
 
-const modelsFiles = globSync('./src/models/**/*.js');
+mongoose.connect(DATABASE).then(() => {
+  console.log('[server] MongoDB/Firestore connected');
 
-for (const filePath of modelsFiles) {
-  require(path.resolve(filePath));
-}
-
-// Start our app!
-const app = require('./app');
-app.set('port', process.env.PORT || 8888);
-const server = app.listen(app.get('port'), () => {
-  console.log(`Express running → On PORT : ${server.address().port}`);
+  const app = require('./app');
+  app.set('port', process.env.PORT || 8888);
+  const server = app.listen(app.get('port'), () => {
+    console.log(`GymOS API running on PORT: ${server.address().port}`);
+  });
+}).catch((err) => {
+  console.error('[server] Database connection failed:', err.message);
+  process.exit(1);
 });

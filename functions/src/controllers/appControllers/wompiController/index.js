@@ -1,10 +1,11 @@
 const axios = require('axios');
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 
 const PLATFORM_PLANS = {
-  basic: { price: 50000, name: 'GymOS Basic', description: 'Plan básico - hasta 50 clientes' },
-  pro: { price: 120000, name: 'GymOS Pro', description: 'Plan Pro - hasta 200 clientes' },
-  enterprise: { price: 250000, name: 'GymOS Enterprise', description: 'Plan Enterprise - clientes ilimitados' },
+  basic: { price: 50000, name: 'GymOS Básico', description: 'Plan básico - 1 gimnasio, hasta 100 clientes' },
+  pro: { price: 120000, name: 'GymOS Pro', description: 'Plan Pro - 3 gimnasios, clientes ilimitados' },
+  ultra: { price: 200000, name: 'GymOS Ultra', description: 'Plan Ultra - gimnasios ilimitados, white-label' },
 };
 
 const WOMPI_SANDBOX_BASE = 'https://sandbox.wompi.co/v1';
@@ -12,50 +13,52 @@ const WOMPI_PROD_BASE = 'https://production.wompi.co/v1';
 const isProd = process.env.NODE_ENV === 'production';
 const WOMPI_BASE = isProd ? WOMPI_PROD_BASE : WOMPI_SANDBOX_BASE;
 
-const PLATFORM_PUBLIC_KEY = process.env.WOMPI_PUBLIC_KEY || '';
-const PLATFORM_PRIVATE_KEY = process.env.WOMPI_PRIVATE_KEY || '';
+const PLATFORM_PUBLIC_KEY = process.env.WOMPI_PUB_KEY || process.env.WOMPI_PUBLIC_KEY || '';
+const PLATFORM_PRIVATE_KEY = process.env.WOMPI_PRV_KEY || process.env.WOMPI_PRIVATE_KEY || '';
+const INTEGRITY_KEY = process.env.WOMPI_INTEGRITY_KEY || '';
 
-// Checkout for PLATFORM subscription (gym owners paying GymOS)
 const platformCheckout = async (req, res) => {
   try {
-    const { gymId, plan } = req.body;
+    const { plan, billing } = req.body;
+    const gymId = req.body.gymId || req.adminId;
+
+    if (!PLATFORM_PUBLIC_KEY) {
+      return res.status(500).json({ success: false, message: 'Wompi public key not configured on server' });
+    }
+    if (!INTEGRITY_KEY) {
+      return res.status(500).json({ success: false, message: 'Wompi integrity key not configured on server' });
+    }
 
     const planInfo = PLATFORM_PLANS[plan];
     if (!planInfo) {
-      return res.status(400).json({ success: false, message: 'Invalid plan selected' });
+      return res.status(400).json({ success: false, message: `Plan '${plan}' not found. Valid: ${Object.keys(PLATFORM_PLANS).join(', ')}` });
     }
 
-    const reference = `GY-PLATFORM-${gymId}-${Date.now()}`;
+    let amountInCents;
+    if (billing === 'annual') {
+      amountInCents = Math.round(planInfo.price * 12 * 0.8) * 100;
+    } else {
+      amountInCents = planInfo.price * 100;
+    }
 
-    const response = await axios.post(
-      `${WOMPI_BASE}/payment_links`,
-      {
-        name: planInfo.name,
-        description: planInfo.description,
-        single_use: true,
-        collect_shipping: false,
-        currency: 'COP',
-        amount_in_cents: planInfo.price * 100,
-        redirect_url: `${process.env.FRONTEND_URL}/dashboard/settings?payment=platform`,
-        reference,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${PLATFORM_PRIVATE_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const reference = `GY-PLATFORM-${gymId || 'NEW'}-${Date.now()}`;
+    const currency = 'COP';
+
+    const hashInput = `${reference}${amountInCents}${currency}${INTEGRITY_KEY}`;
+    const hash = crypto.createHash('sha256').update(hashInput).digest('hex');
 
     return res.status(200).json({
       success: true,
       result: {
-        checkoutUrl: response.data?.data?.payment_link?.permalink,
+        publicKey: PLATFORM_PUBLIC_KEY,
+        currency,
+        amountInCents,
         reference,
+        hash,
         plan,
-        amount: planInfo.price,
+        billing,
       },
-      message: 'Checkout created successfully',
+      message: 'Checkout data created successfully',
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -141,10 +144,19 @@ const webhookHandler = async (req, res) => {
         const Gym = mongoose.model('Gym');
         const startDate = new Date();
         const endDate = new Date(startDate);
-        endDate.setMonth(endDate.getMonth() + 1);
+        const amountCents = transaction.amount_in_cents || 0;
+        const isAnnual = amountCents > 200000 * 100;
+        if (isAnnual) {
+          endDate.setFullYear(endDate.getFullYear() + 1);
+        } else {
+          endDate.setMonth(endDate.getMonth() + 1);
+        }
+
+        const planGuess = amountCents <= 5000000 ? 'basic' : amountCents <= 12000000 ? 'pro' : 'ultra';
 
         await Gym.findByIdAndUpdate(gymId, {
           'platformSubscription.status': 'active',
+          'platformSubscription.plan': planGuess,
           'platformSubscription.startDate': startDate,
           'platformSubscription.endDate': endDate,
           'platformSubscription.wompiRef': reference,

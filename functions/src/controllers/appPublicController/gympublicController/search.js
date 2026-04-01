@@ -2,7 +2,7 @@ const { migrate } = require('./migrate');
 const mongoose = require('mongoose');
 const { ObjectId } = mongoose.Types;
 
-const search = async (Model, req, res, next) => {
+const search = async (Model, req, res) => {
   try {
     const { gymId } = req.query;
 
@@ -16,8 +16,8 @@ const search = async (Model, req, res, next) => {
 
     const result = await Model.findOne({ _id: new ObjectId(gymId), removed: false }).exec();
     if (!result) {
-      return res.status(204).json({
-        success: true,
+      return res.status(404).json({
+        success: false,
         result: null,
         message: 'No document found for the specified gym',
       });
@@ -31,7 +31,7 @@ const search = async (Model, req, res, next) => {
       message: 'Successfully found the document for the specified gym',
     });
   } catch (error) {
-    return next(error);
+    return res.status(500).json({ success: false, result: null, message: error.message });
   }
 };
 

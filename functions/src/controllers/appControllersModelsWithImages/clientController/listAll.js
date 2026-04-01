@@ -6,12 +6,11 @@ const listAll = async (Model, req, res) => {
     // Extract gymId and sort from query parameters
     const { gymId, sort = 'desc' } = req.query;
 
-    // Validate gymId
-    if (!gymId || !ObjectId.isValid(gymId)) {
-      return res.status(400).json({
-        success: false,
+    if (!gymId || gymId === 'undefined' || !ObjectId.isValid(gymId)) {
+      return res.status(203).json({
+        success: true,
         result: [],
-        message: 'Invalid or missing gymId.',
+        message: 'No gymId provided — select a gym first.',
       });
     }
 

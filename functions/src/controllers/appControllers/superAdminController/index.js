@@ -1,6 +1,30 @@
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
+const DEFAULT_PLANS_CONFIG = {
+  annualDiscount: 20,
+  plans: [
+    {
+      id: 'basic',
+      name: 'Básico',
+      monthlyPrice: 50000,
+      features: ['Hasta 50 clientes', 'Clases básicas', 'Soporte email'],
+    },
+    {
+      id: 'pro',
+      name: 'Pro',
+      monthlyPrice: 120000,
+      features: ['Hasta 200 clientes', 'Clases ilimitadas', 'Agenda docentes', 'Soporte prioritario'],
+    },
+    {
+      id: 'enterprise',
+      name: 'Enterprise',
+      monthlyPrice: 250000,
+      features: ['Clientes ilimitados', 'Multi-sede', 'API acceso', 'Soporte dedicado'],
+    },
+  ],
+};
+
 const listGyms = async (req, res) => {
   try {
     const Gym = mongoose.model('Gym');
@@ -60,7 +84,6 @@ const getGymClients = async (req, res) => {
   }
 };
 
-// Generate a short-lived impersonation token for a gym admin
 const impersonate = async (req, res) => {
   try {
     const Admin = mongoose.model('Admin');
@@ -125,4 +148,113 @@ const getPlatformStats = async (req, res) => {
   }
 };
 
-module.exports = { listGyms, getGymDetail, getGymClients, impersonate, getPlatformStats };
+// ─── Platform Plans Config ────────────────────────────────────────────────────
+
+const getPlansConfig = async (req, res) => {
+  try {
+    const Setting = mongoose.model('Setting');
+    const setting = await Setting.findOne({ settingCategory: 'platform', settingKey: 'plans' }).exec();
+    const config = setting?.settingValue || DEFAULT_PLANS_CONFIG;
+
+    return res.status(200).json({ success: true, result: config, message: 'Plans config retrieved' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updatePlansConfig = async (req, res) => {
+  try {
+    const Setting = mongoose.model('Setting');
+    const { plans, annualDiscount } = req.body;
+
+    if (!Array.isArray(plans) || plans.length === 0) {
+      return res.status(400).json({ success: false, message: 'plans array is required' });
+    }
+
+    const discount = Math.min(100, Math.max(0, Number(annualDiscount) || 0));
+
+    const config = { plans, annualDiscount: discount };
+
+    await Setting.findOneAndUpdate(
+      { settingCategory: 'platform', settingKey: 'plans' },
+      { settingCategory: 'platform', settingKey: 'plans', settingValue: config, valueType: 'Object' },
+      { upsert: true, new: true }
+    );
+
+    return res.status(200).json({ success: true, result: config, message: 'Plans config updated' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// ─── Gym Platform Subscriptions ───────────────────────────────────────────────
+
+const listGymSubscriptions = async (req, res) => {
+  try {
+    const Gym = mongoose.model('Gym');
+    const gyms = await Gym.find({ removed: false })
+      .select('name email slug platformSubscription created')
+      .sort({ created: -1 })
+      .exec();
+
+    return res.status(200).json({ success: true, result: gyms, message: 'Subscriptions retrieved' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+const updateGymSubscription = async (req, res) => {
+  try {
+    const Gym = mongoose.model('Gym');
+    const { gymId } = req.params;
+    const { status, plan, price, billingCycle, extendUnit, extendAmount, endDate } = req.body;
+
+    const gym = await Gym.findById(gymId).exec();
+    if (!gym) return res.status(404).json({ success: false, message: 'Gym not found' });
+
+    const sub = gym.platformSubscription || {};
+
+    if (status) sub.status = status;
+    if (plan) sub.plan = plan;
+    if (price !== undefined) sub.price = Number(price);
+    if (billingCycle) sub.billingCycle = billingCycle;
+
+    // Extend by unit (weeks/months) or set explicit endDate
+    if (endDate) {
+      sub.endDate = new Date(endDate);
+    } else if (extendUnit && extendAmount) {
+      const base = sub.endDate && new Date(sub.endDate) > new Date() ? new Date(sub.endDate) : new Date();
+      const amount = Number(extendAmount);
+      if (extendUnit === 'days') base.setDate(base.getDate() + amount);
+      else if (extendUnit === 'weeks') base.setDate(base.getDate() + amount * 7);
+      else if (extendUnit === 'months') base.setMonth(base.getMonth() + amount);
+      else if (extendUnit === 'years') base.setFullYear(base.getFullYear() + amount);
+      sub.endDate = base;
+    }
+
+    if (!sub.startDate) sub.startDate = new Date();
+
+    gym.platformSubscription = sub;
+    await gym.save();
+
+    return res.status(200).json({
+      success: true,
+      result: { gymId, platformSubscription: sub },
+      message: 'Gym subscription updated',
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+module.exports = {
+  listGyms,
+  getGymDetail,
+  getGymClients,
+  impersonate,
+  getPlatformStats,
+  getPlansConfig,
+  updatePlansConfig,
+  listGymSubscriptions,
+  updateGymSubscription,
+};

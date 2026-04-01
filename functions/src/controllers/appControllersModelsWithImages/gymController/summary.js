@@ -3,7 +3,7 @@ const moment = require('moment');
 
 const InvoiceModel = mongoose.model('Invoice');
 
-const summary = async (Model, req, res, next) => {
+const summary = async (Model, req, res) => {
   try {
     let defaultType = 'month';
     const { type } = req.query;
@@ -93,7 +93,7 @@ const summary = async (Model, req, res, next) => {
       message: 'Successfully retrieved summary of new and active clients',
     });
   } catch (error) {
-    next(error);
+    return res.status(500).json({ success: false, result: null, message: error.message });
   }
 };
 

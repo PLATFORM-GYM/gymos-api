@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const QuoteModel = mongoose.model('Quote');
 const InvoiceModel = mongoose.model('Invoice');
 
-const remove = async (Model, req, res, next) => {
+const remove = async (Model, req, res) => {
   try {
     const { id } = req.params;
 
@@ -49,7 +49,7 @@ const remove = async (Model, req, res, next) => {
       message: `Successfully marked gym as removed with ID: ${id}`,
     });
   } catch (error) {
-    next(error);
+    return res.status(500).json({ success: false, result: null, message: error.message });
   }
 };
 
