@@ -57,15 +57,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Here our API Routes
+// Here our API Routes — public routes MUST come before authenticated routes
+// because /api/public/* would otherwise match the /api auth middleware first
 
+app.use('/api/public', corePublicRouter);
+app.use('/public', corePublicRouter);
+app.use('/download', coreDownloadRouter);
 app.use('/api', coreAuthRouter);
 app.use('/api', adminAuth.isValidAuthToken, coreApiRouter);
 app.use('/api', adminAuth.isValidAuthToken, erpApiRouter);
 app.use('/api', adminAuth.isValidAuthToken, gymsOsRouter);
-app.use('/download', coreDownloadRouter);
-app.use('/api/public', corePublicRouter);
-app.use('/public', corePublicRouter);
 
 // If that above routes didnt work, we 404 them and forward to error handler
 app.use(errorHandlers.notFound);
