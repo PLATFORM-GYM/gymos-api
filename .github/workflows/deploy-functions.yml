@@ -37,8 +37,5 @@ jobs:
           echo "WOMPI_INTEGRITY_KEY=${{ secrets.WOMPI_INTEGRITY_KEY }}" >> functions/.env
           echo "FRONTEND_URL=${{ secrets.FRONTEND_URL }}" >> functions/.env
 
-      - name: Delete old 1st gen function (if exists)
-        run: firebase functions:delete api --project gyms-4b30f --force --token "${{ secrets.FIREBASE_TOKEN }}" || true
-
-      - name: Deploy 2nd gen Cloud Functions
+      - name: Deploy Cloud Functions (2nd gen)
         run: firebase deploy --only functions --project gyms-4b30f --force --token "${{ secrets.FIREBASE_TOKEN }}"
