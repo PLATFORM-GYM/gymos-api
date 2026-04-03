@@ -50,9 +50,14 @@ app.use(flattenNestedFields);
 // Health endpoint (no auth)
 app.get('/api/health', (req, res) => {
   const mongoose = require('mongoose');
+  const states = { 0: 'disconnected', 1: 'connected', 2: 'connecting', 3: 'disconnecting' };
   return res.json({
     success: true,
-    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    db: states[mongoose.connection.readyState] || 'unknown',
+    dbHost: mongoose.connection.host || '(none)',
+    dbName: mongoose.connection.name || '(none)',
+    envSet: !!process.env.DATABASE,
+    envPrefix: process.env.DATABASE ? process.env.DATABASE.substring(0, 25) + '...' : '(not set)',
     ts: new Date().toISOString(),
   });
 });
