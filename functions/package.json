@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "GymOS Backend — Firebase Cloud Functions (Node.js + Express + MongoDB)",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "main": "index.js",
   "scripts": {
