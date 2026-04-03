@@ -54,36 +54,48 @@ modelFiles.forEach((f) => require(f));
 
 const app = require('./src/app');
 
-const functions = require('firebase-functions');
+// ── Cloud Functions 2nd gen (Cloud Run backed) ──
+const { onRequest } = require('firebase-functions/v2/https');
+
 const CORS_ALLOW_METHODS = 'GET, POST, PUT, PATCH, DELETE, OPTIONS';
 const CORS_ALLOW_HEADERS = 'Content-Type, Authorization, X-Requested-With, Accept, Cookie';
 
-exports.api = functions.runWith({ timeoutSeconds: 120, memory: '1GB' }).https.onRequest(async (req, res) => {
-  const origin = req.headers['origin'] || '*';
-  res.set('Access-Control-Allow-Origin', origin);
-  res.set('Access-Control-Allow-Methods', CORS_ALLOW_METHODS);
-  res.set('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS);
-  res.set('Access-Control-Allow-Credentials', 'true');
-  res.set('Access-Control-Max-Age', '86400');
-  res.set('Vary', 'Origin');
-  if (req.method === 'OPTIONS') return res.status(204).send('');
+exports.api = onRequest(
+  {
+    timeoutSeconds: 120,
+    memory: '1GiB',
+    region: 'us-central1',
+    minInstances: 0,
+    maxInstances: 10,
+    concurrency: 80,
+  },
+  async (req, res) => {
+    const origin = req.headers['origin'] || '*';
+    res.set('Access-Control-Allow-Origin', origin);
+    res.set('Access-Control-Allow-Methods', CORS_ALLOW_METHODS);
+    res.set('Access-Control-Allow-Headers', CORS_ALLOW_HEADERS);
+    res.set('Access-Control-Allow-Credentials', 'true');
+    res.set('Access-Control-Max-Age', '86400');
+    res.set('Vary', 'Origin');
+    if (req.method === 'OPTIONS') return res.status(204).send('');
 
-  if (!dbReady) {
-    try {
-      await connectDB();
-    } catch (err) {
-      console.error('[request] DB connect failed on request:', err.message);
-      return res.status(503).json({
-        success: false,
-        message: 'Database connection failed: ' + err.message,
-        dbPrefix: DB_PREFIX,
-      });
+    if (!dbReady) {
+      try {
+        await connectDB();
+      } catch (err) {
+        console.error('[request] DB connect failed on request:', err.message);
+        return res.status(503).json({
+          success: false,
+          message: 'Database connection failed: ' + err.message,
+          dbPrefix: DB_PREFIX,
+        });
+      }
     }
-  }
 
-  if (!req.url.startsWith('/api')) {
-    req.url = '/api' + req.url;
-  }
+    if (!req.url.startsWith('/api')) {
+      req.url = '/api' + req.url;
+    }
 
-  return app(req, res);
-});
+    return app(req, res);
+  }
+);
